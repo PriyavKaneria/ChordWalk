@@ -1,13 +1,15 @@
 "use client";
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ChordMidpoint = () => {
-  const [sides, setSides] = useState(4);
-  const [chordLength, setChordLength] = useState(50);
-  const [position, setPosition] = useState(0);
+  const [sides, setSides] = useState(3);
+  const [chordLength, setChordLength] = useState(30);
+  const [currentPointIndex, setCurrentPointIndex] = useState(0);
+  const [stepPoints, setStepPoints] = useState([] as { x: number; y: number; }[]);
+  const [activeForward, setActiveForward] = useState(false);
+  const totalSteps = 1000;
   const center = { x: 0, y: 0 };
   const defaultPoint = center;
 
@@ -72,21 +74,26 @@ const ChordMidpoint = () => {
     };
   }, []);
 
+  // Generate step points
+  useEffect(() => {
+    const polygonPoints = generatePolygon(sides);
+    const points = [];
+    for (let i = 0; i < totalSteps; i++) {
+      points.push(getPointOnPolygon(polygonPoints, i / totalSteps));
+    }
+    setStepPoints(points);
+  }, [sides, generatePolygon, getPointOnPolygon]);
+
   // Get current points
-  const getCurrentPoints = useCallback(() => {
+  const getIndexPoints = useCallback((index: number) => {
     const polygonPoints = generatePolygon(sides);
     const actualLength = (chordLength / 100) * 160;
 
-    const point1 = getPointOnPolygon(polygonPoints, position);
+    const point1 = stepPoints[index] || defaultPoint;
     const intersections = polygonPoints.flatMap((p, i) => {
       const nextP = polygonPoints[(i + 1) % polygonPoints.length];
       return circleLineIntersection(point1, actualLength, p, nextP);
     });
-
-    const oppositePoint = {
-      x: center.x + Math.cos(Math.atan2(point1.y - center.y, point1.x - center.x)) * 100,
-      y: center.y + Math.sin(Math.atan2(point1.y - center.y, point1.x - center.x)) * 100
-    };
 
     // sort intersections in clockwise direction from green to grey
     intersections.sort((a, b) => {
@@ -94,6 +101,10 @@ const ChordMidpoint = () => {
       const angleA = Math.atan2(a.y - point1.y, a.x - point1.x);
       const angleB = Math.atan2(b.y - point1.y, b.x - point1.x);
 
+      // swap if activeForward is true
+      if (activeForward) {
+        return (angleA - angleB + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      }
       // Ensure clockwise order: subtract angles and handle wrapping around 2*PI
       return (angleB - angleA + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
     });
@@ -102,25 +113,37 @@ const ChordMidpoint = () => {
       point1,
       intersections
     };
-  }, [sides, position, chordLength, generatePolygon, getPointOnPolygon, circleLineIntersection]);
+  }, [sides, chordLength, currentPointIndex, stepPoints, generatePolygon, circleLineIntersection]);
 
-  const { point1, intersections } = getCurrentPoints();
+  const { point1, intersections } = getIndexPoints(currentPointIndex);
+  const { point1: nextPoint1, intersections: nextIntersections } = getIndexPoints((currentPointIndex + 1) % totalSteps);
   const polygonPoints = generatePolygon(sides);
 
-  // end of diameter from current point as center on red circle
-  const oppositePoint = {
-    x: center.x + Math.cos(Math.atan2(point1.y - center.y, point1.x - center.x)) * 100,
-    y: center.y + Math.sin(Math.atan2(point1.y - center.y, point1.x - center.x)) * 100
-  };
-
   // Find the next intersection point in the clockwise direction from opposite point
-  // const nextIntersection = intersections.find(p => {
-  //   const angleOpposite = Math.atan2(oppositePoint.y - point1.y, oppositePoint.x - point1.x);
-  //   const angleP = Math.atan2(p.y - point1.y, p.x - point1.x);
-  //   console.log(p.x, p.y, angleP, angleOpposite);
-  //   return angleP > angleOpposite;
-  // });
-  const nextIntersection = intersections[0];
+  const point2 = intersections[0] || defaultPoint;
+  const nextPoint2 = nextIntersections[0] || defaultPoint;
+
+  const checkValidAndSetCurrentPointIndex = (value: number) => {
+    if (Math.abs(nextPoint2.x - point2.x) > 10 || Math.abs(nextPoint2.y - point2.y) > 10) {
+      console.log("Switching to ", !activeForward ? "forward" : "backward");
+      console.log("Next Intersection: ", point2, "Next Probable Intersection: ", nextPoint2);
+
+      // switch activeForward and try
+      // find closest index to nextIntersection
+      const closestIndex = stepPoints.reduce((acc, curr, index) => {
+        const distance = Math.sqrt((curr.x - point2.x) ** 2 + (curr.y - point2.y) ** 2);
+        if (distance < acc.distance) {
+          return { index, distance };
+        }
+        return acc;
+      }, { index: 0, distance: Infinity });
+      setCurrentPointIndex(closestIndex.index);
+      setActiveForward(!activeForward);
+      return
+    }
+
+    setCurrentPointIndex(value);
+  }
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -138,46 +161,27 @@ const ChordMidpoint = () => {
               strokeWidth="1"
             />
 
-            {/* Current chord */}
-            {/* <circle
-              cx={point1.x}
-              cy={point1.y}
-              r={(chordLength / 100) * 160}
-              stroke="red"
-              strokeWidth="2"
-              fill="none"
-            /> */}
-
-            {/* Intersection points */}
-            {/* {intersections.map((point, index) => (
-              <circle key={index} cx={point.x} cy={point.y} r="3" fill="blue" />
-            ))} */}
-
             {/* Center */}
             <circle cx={center.x} cy={center.y} r="3" fill="black" />
 
-            {/* Opposite point */}
-            {/* <circle cx={oppositePoint.x} cy={oppositePoint.y} r="3" fill="grey" /> */}
-
             {/* Line to next intersection */}
-            {nextIntersection && (
-              <line
-                x1={point1.x}
-                y1={point1.y}
-                x2={nextIntersection.x}
-                y2={nextIntersection.y}
-                stroke="green"
-                strokeWidth="2"
-              />
-            )}
+            <line
+              x1={point1.x}
+              y1={point1.y}
+              x2={point2.x}
+              y2={point2.y}
+              stroke="green"
+              strokeWidth="2"
+            />
+
+            {/* Next probable intersection */}
+            <circle cx={nextPoint2.x} cy={nextPoint2.y} r="4" fill="orange" />
 
             {/* Current point */}
-            <circle cx={point1.x} cy={point1.y} r="3" fill="blue" />
+            <circle cx={point1.x} cy={point1.y} r="3" fill="red" />
 
             {/* Next intersection */}
-            {nextIntersection && (
-              <circle cx={nextIntersection.x} cy={nextIntersection.y} r="3" fill="blue" />
-            )}
+            <circle cx={point2.x} cy={point2.y} r="3" fill="blue" />
           </svg>
 
           <div className="space-y-4">
@@ -193,13 +197,13 @@ const ChordMidpoint = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Position: {Math.round(position * 100)}%</label>
+              <label className="block text-sm font-medium mb-2">Step: {currentPointIndex} / 1000</label>
               <Slider
-                value={[position]}
+                value={[currentPointIndex]}
                 min={0}
-                max={0.999}
-                step={0.001}
-                onValueChange={(value) => setPosition(value[0])}
+                max={totalSteps - 1}
+                step={1}
+                onValueChange={(value) => checkValidAndSetCurrentPointIndex(value[0])}
               />
             </div>
 
