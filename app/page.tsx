@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -25,17 +25,25 @@ const ChordWalker = () => {
   const center = { x: 0, y: 0 };
   const defaultPoint = center;
 
+  const toFixed = (num: number, precision: number = 6) => {
+    return Number(num.toFixed(precision));
+  };
+
   const generatePolygon = (sides: number, showEllipse: boolean, a: number, b: number) => {
     const points = [];
     const radius = 80;
-    for (let i = 0; i < sides; i++) {
-      const angle = (i * 2 * Math.PI) / sides;
-      if (showEllipse) {
+    if (showEllipse) {
+      const step = 2 * Math.PI / totalSteps;
+      for (let i = 0; i < totalSteps; i++) {
+        const angle = i * step;
         points.push({
           x: a * Math.cos(angle),
           y: b * Math.sin(angle)
         });
-      } else {
+      }
+    } else {
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides;
         points.push({
           x: radius * Math.cos(angle),
           y: radius * Math.sin(angle)
@@ -162,7 +170,6 @@ const ChordWalker = () => {
       } else {
         setCurrentPointIndex(closestIndex.index + 1);
       }
-      console.log("switched to ", !activeForward ? "forward" : "backward");
       setActiveForward(!activeForward);
       return;
     }
@@ -193,14 +200,15 @@ const ChordWalker = () => {
     if (point2.x === 0 && point2.y === 0) return;
     if (point1.x === point2.x && point1.y === point2.y) return;
     // add midpoint to tracedMidpointPath
-    setTracedMidpointPath([...tracedMidpointPath, { x: (point1.x + point2.x) / 2, y: (point1.y + point2.y) / 2 }]);
+    setTracedMidpointPath(prevPath => [...prevPath, { x: (point1.x + point2.x) / 2, y: (point1.y + point2.y) / 2 }]);
   }, [currentPointIndex]);
 
   useEffect(() => {
     setCurrentPointIndex(0);
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       setTracedMidpointPath([]);
     }, 200);
+    return () => clearTimeout(timeout);
   }, [sides, showEllipse, ellipseA, ellipseB]);
 
   return (
@@ -212,42 +220,46 @@ const ChordWalker = () => {
         <div className="space-y-6"></div>
         <div className='w-full h-96 mb-3 bg-slate-50 relative'>
           <svg viewBox="-100 -100 200 200" className="w-full h-full">
-            <path
-              d={`M ${polygonPoints.map(p => `${p.x},${p.y}`).join(' L ')} Z`}
-              fill="none"
-              stroke="black"
-              strokeWidth="1"
-            />
-            <circle cx={center.x} cy={center.y} r="1" fill="black" opacity={0.7} />
+            {showEllipse ? (
+              <ellipse cx="0" cy="0" rx={toFixed(ellipseA)} ry={toFixed(ellipseB)} fill="none" stroke="black" strokeWidth="1" />
+            ) : (
+              <path
+                d={`M ${polygonPoints.map(p => `${toFixed(p.x)},${toFixed(p.y)}`).join(' L ')} Z`}
+                fill="none"
+                stroke="black"
+                strokeWidth="1"
+              />
+            )}
+            <circle cx={toFixed(center.x)} cy={toFixed(center.y)} r="1" fill="black" opacity={0.7} />
             {showNextPredictedPoint && (
-              <circle cx={nextPoint2.x} cy={nextPoint2.y} r="4" fill="orange" />
+              <circle cx={toFixed(nextPoint2.x)} cy={toFixed(nextPoint2.y)} r="4" fill="orange" />
             )}
             <line
-              x1={point1.x}
-              y1={point1.y}
-              x2={point2.x}
-              y2={point2.y}
+              x1={toFixed(point1.x)}
+              y1={toFixed(point1.y)}
+              x2={toFixed(point2.x)}
+              y2={toFixed(point2.y)}
               stroke="green"
               strokeWidth="2"
             />
             {/* Intersection points */}
             {showActiveNeighbors && intersections.map((point, index) => (
-              <circle key={index} cx={point.x} cy={point.y} r="3" fill="grey" />
+              <circle key={index} cx={toFixed(point.x)} cy={toFixed(point.y)} r="3" fill="grey" />
             ))}
 
             {showTracedMidpointPath && (
               <path
-                d={`M ${tracedMidpointPath.map(p => `${p.x},${p.y}`).join(' L ')}`}
+                d={`M ${tracedMidpointPath.map(p => `${toFixed(p.x)},${toFixed(p.y)}`).join(' L ')}`}
                 fill="none"
                 stroke="orange"
                 strokeWidth="1"
               />
             )}
 
-            <circle cx={point2.x} cy={point2.y} r="3" fill="blue" />
-            <circle cx={point1.x} cy={point1.y} r="3" fill="red" />
+            <circle cx={toFixed(point2.x)} cy={toFixed(point2.y)} r="3" fill="blue" />
+            <circle cx={toFixed(point1.x)} cy={toFixed(point1.y)} r="3" fill="red" />
             {showMidpoint && (
-              <circle cx={(point1.x + point2.x) / 2} cy={(point1.y + point2.y) / 2} stroke='black' r="2" fill="pink" />
+              <circle cx={toFixed((point1.x + point2.x) / 2)} cy={toFixed((point1.y + point2.y) / 2)} stroke='black' r="2" fill="pink" />
             )}
           </svg>
           <button
