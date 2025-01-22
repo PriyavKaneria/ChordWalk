@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -8,13 +8,16 @@ const ChordMidpoint = () => {
   const [chordLength, setChordLength] = useState(30);
   const [currentPointIndex, setCurrentPointIndex] = useState(0);
   const [stepPoints, setStepPoints] = useState([] as { x: number; y: number; }[]);
+  const [play, setPlay] = useState(false);
+  const [wait, setWait] = useState(false)
   const [activeForward, setActiveForward] = useState(false);
+  const [point2, setPoint2] = useState<{ x: number; y: number; }>({ x: 0, y: 0 });
+  const [nextPoint2, setNextPoint2] = useState<{ x: number; y: number; }>({ x: 0, y: 0 });
   const totalSteps = 1000;
   const center = { x: 0, y: 0 };
   const defaultPoint = center;
 
-  // Generate regular polygon points
-  const generatePolygon = useCallback((sides: number) => {
+  const generatePolygon = (sides: number) => {
     const points = [];
     const radius = 80;
     for (let i = 0; i < sides; i++) {
@@ -25,10 +28,9 @@ const ChordMidpoint = () => {
       });
     }
     return points;
-  }, []);
+  };
 
-  // Calculate intersection points between circle and line segment
-  const circleLineIntersection = useCallback((center: { x: number; y: number; }, radius: number, p1: { x: number; y: number; }, p2: { x: number; y: number; }) => {
+  const circleLineIntersection = (center: { x: number; y: number; }, radius: number, p1: { x: number; y: number; }, p2: { x: number; y: number; }) => {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     const a = dx * dx + dy * dy;
@@ -56,10 +58,9 @@ const ChordMidpoint = () => {
       });
     }
     return points;
-  }, []);
+  };
 
-  // Get point on polygon perimeter
-  const getPointOnPolygon = useCallback((polygonPoints: string | any[], t: number) => {
+  const getPointOnPolygon = (polygonPoints: { x: number; y: number; }[], t: number) => {
     const totalSegments = polygonPoints.length;
     const segment = Math.floor(t * totalSegments);
     const nextSegment = (segment + 1) % totalSegments;
@@ -72,20 +73,18 @@ const ChordMidpoint = () => {
       x: p1.x + (p2.x - p1.x) * segmentT,
       y: p1.y + (p2.y - p1.y) * segmentT
     };
-  }, []);
+  };
 
-  // Generate step points
   useEffect(() => {
     const polygonPoints = generatePolygon(sides);
     const points = [];
-    for (let i = 0; i < totalSteps; i++) {
+    for (let i = 0; i < totalSteps + 200; i++) {
       points.push(getPointOnPolygon(polygonPoints, i / totalSteps));
     }
     setStepPoints(points);
-  }, [sides, generatePolygon, getPointOnPolygon]);
+  }, [sides]);
 
-  // Get current points
-  const getIndexPoints = useCallback((index: number) => {
+  const getIndexPoints = (index: number) => {
     const polygonPoints = generatePolygon(sides);
     const actualLength = (chordLength / 100) * 160;
 
@@ -95,41 +94,47 @@ const ChordMidpoint = () => {
       return circleLineIntersection(point1, actualLength, p, nextP);
     });
 
-    // sort intersections in clockwise direction from green to grey
     intersections.sort((a, b) => {
-      // Calculate angles relative to the green dot (point1)
       const angleA = Math.atan2(a.y - point1.y, a.x - point1.x);
       const angleB = Math.atan2(b.y - point1.y, b.x - point1.x);
 
-      // swap if activeForward is true
       if (activeForward) {
         return (angleA - angleB + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
       }
-      // Ensure clockwise order: subtract angles and handle wrapping around 2*PI
-      return (angleB - angleA + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      return (angleB - angleA + 2 * Math.PI + 0.1) % (2 * Math.PI) - Math.PI;
     });
 
     return {
       point1,
       intersections
     };
-  }, [sides, chordLength, currentPointIndex, stepPoints, generatePolygon, circleLineIntersection]);
+  };
 
-  const { point1, intersections } = getIndexPoints(currentPointIndex);
-  const { point1: nextPoint1, intersections: nextIntersections } = getIndexPoints((currentPointIndex + 1) % totalSteps);
-  const polygonPoints = generatePolygon(sides);
+  useEffect(() => {
+    const { point1, intersections } = getIndexPoints(currentPointIndex);
+    const polygonPoints = generatePolygon(sides);
 
-  // Find the next intersection point in the clockwise direction from opposite point
-  const point2 = intersections[0] || defaultPoint;
-  const nextPoint2 = nextIntersections[0] || defaultPoint;
+    if (intersections.length > 0) {
+      const closestIntersection = intersections.reduce((closest, current) => {
+        const distance = Math.sqrt((current.x - point2.x) ** 2 + (current.y - point2.y) ** 2);
+        return distance < closest.distance ? { point: current, distance } : closest;
+      }, { point: intersections[0], distance: Infinity }).point;
+      setPoint2(closestIntersection);
+    }
+
+    const nextIndex = (currentPointIndex + 1) % totalSteps;
+    const { intersections: nextIntersections } = getIndexPoints(nextIndex);
+    if (nextIntersections.length > 0) {
+      setNextPoint2(nextIntersections[0]);
+    }
+  }, [currentPointIndex, sides, chordLength, stepPoints, activeForward]);
 
   const checkValidAndSetCurrentPointIndex = (value: number) => {
-    if (Math.abs(nextPoint2.x - point2.x) > 10 || Math.abs(nextPoint2.y - point2.y) > 10) {
-      console.log("Switching to ", !activeForward ? "forward" : "backward");
-      console.log("Next Intersection: ", point2, "Next Probable Intersection: ", nextPoint2);
+    const nextPoint1 = stepPoints[value] || defaultPoint;
+    const nextIntersections = getIndexPoints(value).intersections;
+    const nextPoint2 = nextIntersections[0] || defaultPoint;
 
-      // switch activeForward and try
-      // find closest index to nextIntersection
+    if (Math.abs(nextPoint2.x - point2.x) > 10 || Math.abs(nextPoint2.y - point2.y) > 10) {
       const closestIndex = stepPoints.reduce((acc, curr, index) => {
         const distance = Math.sqrt((curr.x - point2.x) ** 2 + (curr.y - point2.y) ** 2);
         if (distance < acc.distance) {
@@ -137,13 +142,44 @@ const ChordMidpoint = () => {
         }
         return acc;
       }, { index: 0, distance: Infinity });
-      setCurrentPointIndex(closestIndex.index);
+
+      setPoint2(stepPoints[currentPointIndex]);
+      setCurrentPointIndex(closestIndex.index + 1);
+      console.log("switched to ", !activeForward ? "forward" : "backward");
       setActiveForward(!activeForward);
-      return
+
+      if (play) {
+        setWait(true);
+      }
+      return;
     }
 
     setCurrentPointIndex(value);
-  }
+  };
+
+  const { point1, intersections } = getIndexPoints(currentPointIndex);
+  const polygonPoints = generatePolygon(sides);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (play) {
+      if (wait) {
+        console.log(point1, point2, currentPointIndex);
+        setWait(false)
+        setTimeout(() => {
+          interval = setInterval(() => {
+            checkValidAndSetCurrentPointIndex((currentPointIndex + 1) % totalSteps);
+          }, 5);
+          setWait(false);
+        }, 100);
+      } else {
+        interval = setInterval(() => {
+          checkValidAndSetCurrentPointIndex((currentPointIndex + 1) % totalSteps);
+        }, 5);
+      }
+    }
+    return () => clearInterval(interval);
+  }, [play, currentPointIndex]);
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -151,72 +187,76 @@ const ChordMidpoint = () => {
         <CardTitle>Chord Midpoint Path</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          <svg viewBox="-100 -100 200 200" className="w-full h-96 bg-slate-50">
-            {/* Base polygon */}
-            <path
-              d={`M ${polygonPoints.map(p => `${p.x},${p.y}`).join(' L ')} Z`}
-              fill="none"
-              stroke="black"
-              strokeWidth="1"
+        <div className="space-y-6"></div>
+        <svg viewBox="-100 -100 200 200" className="w-full h-96 bg-slate-50">
+          <path
+            d={`M ${polygonPoints.map(p => `${p.x},${p.y}`).join(' L ')} Z`}
+            fill="none"
+            stroke="black"
+            strokeWidth="1"
+          />
+          <circle cx={center.x} cy={center.y} r="3" fill="black" />
+          <circle cx={nextPoint2.x} cy={nextPoint2.y} r="4" fill="orange" />
+          <line
+            x1={point1.x}
+            y1={point1.y}
+            x2={point2.x}
+            y2={point2.y}
+            stroke="green"
+            strokeWidth="2"
+          />
+          {/* Intersection points */}
+          {intersections.map((point, index) => (
+            <circle key={index} cx={point.x} cy={point.y} r="3" fill="lightblue" />
+          ))}
+
+          <circle cx={point2.x} cy={point2.y} r="3" fill="blue" />
+          <circle cx={point1.x} cy={point1.y} r="3" fill="red" />
+
+
+        </svg>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Number of Sides: {sides}</label>
+            <Slider
+              value={[sides]}
+              min={3}
+              max={10}
+              step={1}
+              onValueChange={(value) => setSides(value[0])}
             />
+          </div>
 
-            {/* Center */}
-            <circle cx={center.x} cy={center.y} r="3" fill="black" />
-
-            {/* Line to next intersection */}
-            <line
-              x1={point1.x}
-              y1={point1.y}
-              x2={point2.x}
-              y2={point2.y}
-              stroke="green"
-              strokeWidth="2"
+          <div>
+            <label className="block text-sm font-medium mb-2">Step: {currentPointIndex} / 1000</label>
+            <Slider
+              value={[currentPointIndex]}
+              min={0}
+              max={totalSteps - 1 + 200}
+              step={1}
+              onValueChange={(value) => checkValidAndSetCurrentPointIndex(value[0])}
             />
+          </div>
 
-            {/* Next probable intersection */}
-            <circle cx={nextPoint2.x} cy={nextPoint2.y} r="4" fill="orange" />
+          <div>
+            <button
+              className="bg-blue-500 text-white px-4 py-2 rounded"
+              onClick={() => setPlay(!play)}
+            >
+              {play ? 'Pause' : 'Play'}
+            </button>
+          </div>
 
-            {/* Current point */}
-            <circle cx={point1.x} cy={point1.y} r="3" fill="red" />
-
-            {/* Next intersection */}
-            <circle cx={point2.x} cy={point2.y} r="3" fill="blue" />
-          </svg>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Number of Sides: {sides}</label>
-              <Slider
-                value={[sides]}
-                min={3}
-                max={10}
-                step={1}
-                onValueChange={(value) => setSides(value[0])}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Step: {currentPointIndex} / 1000</label>
-              <Slider
-                value={[currentPointIndex]}
-                min={0}
-                max={totalSteps - 1}
-                step={1}
-                onValueChange={(value) => checkValidAndSetCurrentPointIndex(value[0])}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Chord Length: {chordLength}%</label>
-              <Slider
-                value={[chordLength]}
-                min={10}
-                max={100}
-                step={1}
-                onValueChange={(value) => setChordLength(value[0])}
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Chord Length: {chordLength}%</label>
+            <Slider
+              value={[chordLength]}
+              min={10}
+              max={100}
+              step={1}
+              onValueChange={(value) => setChordLength(value[0])}
+            />
           </div>
         </div>
       </CardContent>
