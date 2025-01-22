@@ -9,7 +9,8 @@ const ChordMidpoint = () => {
   const [currentPointIndex, setCurrentPointIndex] = useState(0);
   const [stepPoints, setStepPoints] = useState([] as { x: number; y: number; }[]);
   const [play, setPlay] = useState(false);
-  const [wait, setWait] = useState(false)
+  const [showActiveNeighbors, setShowActiveNeighbors] = useState(false);
+  const [showNextPredictedPoint, setShowNextPredictedPoint] = useState(false);
   const [activeForward, setActiveForward] = useState(false);
   const [point2, setPoint2] = useState<{ x: number; y: number; }>({ x: 0, y: 0 });
   const [nextPoint2, setNextPoint2] = useState<{ x: number; y: number; }>({ x: 0, y: 0 });
@@ -147,10 +148,6 @@ const ChordMidpoint = () => {
       setCurrentPointIndex(closestIndex.index + 1);
       console.log("switched to ", !activeForward ? "forward" : "backward");
       setActiveForward(!activeForward);
-
-      if (play) {
-        setWait(true);
-      }
       return;
     }
 
@@ -163,20 +160,9 @@ const ChordMidpoint = () => {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (play) {
-      if (wait) {
-        console.log(point1, point2, currentPointIndex);
-        setWait(false)
-        setTimeout(() => {
-          interval = setInterval(() => {
-            checkValidAndSetCurrentPointIndex((currentPointIndex + 1) % totalSteps);
-          }, 5);
-          setWait(false);
-        }, 100);
-      } else {
-        interval = setInterval(() => {
-          checkValidAndSetCurrentPointIndex((currentPointIndex + 1) % totalSteps);
-        }, 5);
-      }
+      interval = setInterval(() => {
+        checkValidAndSetCurrentPointIndex((currentPointIndex + 1) % totalSteps);
+      }, 5);
     }
     return () => clearInterval(interval);
   }, [play, currentPointIndex]);
@@ -196,7 +182,9 @@ const ChordMidpoint = () => {
             strokeWidth="1"
           />
           <circle cx={center.x} cy={center.y} r="3" fill="black" />
-          <circle cx={nextPoint2.x} cy={nextPoint2.y} r="4" fill="orange" />
+          {showNextPredictedPoint && (
+            <circle cx={nextPoint2.x} cy={nextPoint2.y} r="4" fill="orange" />
+          )}
           <line
             x1={point1.x}
             y1={point1.y}
@@ -206,8 +194,8 @@ const ChordMidpoint = () => {
             strokeWidth="2"
           />
           {/* Intersection points */}
-          {intersections.map((point, index) => (
-            <circle key={index} cx={point.x} cy={point.y} r="3" fill="lightblue" />
+          {showActiveNeighbors && intersections.map((point, index) => (
+            <circle key={index} cx={point.x} cy={point.y} r="3" fill="grey" />
           ))}
 
           <circle cx={point2.x} cy={point2.y} r="3" fill="blue" />
@@ -246,6 +234,12 @@ const ChordMidpoint = () => {
             >
               {play ? 'Pause' : 'Play'}
             </button>
+
+            <input className='m-2 ml-4 align-middle' type='checkbox' id='showNeighbors' checked={showActiveNeighbors} onChange={() => setShowActiveNeighbors(!showActiveNeighbors)} />
+            <label className='align-middle select-none' htmlFor='showNeighbors'>Show Active Neighbors (grey)</label>
+            
+            <input className='m-2 ml-4 align-middle' type='checkbox' id='showNextPred' checked={showNextPredictedPoint} onChange={() => setShowNextPredictedPoint(!showNextPredictedPoint)} />
+            <label className='align-middle select-none' htmlFor='showNextPred'>Show Next Predicted Point (orange)</label>
           </div>
 
           <div>
