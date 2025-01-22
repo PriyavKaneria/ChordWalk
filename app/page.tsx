@@ -1,7 +1,12 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Moon, Sun } from "lucide-react"
+import { Toggle } from "@/components/ui/toggle";
 
 const ChordWalker = () => {
   const [sides, setSides] = useState(3);
@@ -21,6 +26,7 @@ const ChordWalker = () => {
   const [tracedMidpointPath, setTracedMidpointPath] = useState([] as { x: number; y: number; }[]);
   const [activeForward, setActiveForward] = useState(false);
   const [nextPoint2, setNextPoint2] = useState<{ x: number; y: number; }>({ x: 0, y: 0 });
+  const [darkMode, setDarkMode] = useState(false);
   const totalSteps = 1000;
   const center = { x: 0, y: 0 };
   const defaultPoint = center;
@@ -211,26 +217,41 @@ const ChordWalker = () => {
     return () => clearTimeout(timeout);
   }, [sides, showEllipse, ellipseA, ellipseB]);
 
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    setDarkMode(theme === 'dark');
+  }, [theme]);
+
   return (
-    <Card className="w-full max-w-2xl mx-auto my-3">
+    <Card className="w-full max-w-2xl mx-auto my-3 relative">
       <CardHeader>
         <CardTitle>Chord Walker</CardTitle>
+        <Toggle
+          className='absolute right-3 top-3'
+          onClick={() => {
+            setTheme(darkMode ? 'light' : 'dark');
+            setDarkMode(!darkMode);
+          }}
+        >
+          {darkMode ? <Sun /> : <Moon />}
+        </Toggle>
       </CardHeader>
       <CardContent>
         <div className="space-y-6"></div>
-        <div className='w-full h-96 mb-3 bg-slate-50 relative'>
+        <div className={`w-full h-96 mb-3 relative ${darkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
           <svg viewBox="-100 -100 200 200" className="w-full h-full">
             {showEllipse ? (
-              <ellipse cx="0" cy="0" rx={toFixed(ellipseA)} ry={toFixed(ellipseB)} fill="none" stroke="black" strokeWidth="1" />
+              <ellipse cx="0" cy="0" rx={toFixed(ellipseA)} ry={toFixed(ellipseB)} fill="none" stroke={darkMode ? 'white' : 'black'} strokeWidth="1" />
             ) : (
               <path
                 d={`M ${polygonPoints.map(p => `${toFixed(p.x)},${toFixed(p.y)}`).join(' L ')} Z`}
                 fill="none"
-                stroke="black"
+                stroke={darkMode ? 'white' : 'black'}
                 strokeWidth="1"
               />
             )}
-            <circle cx={toFixed(center.x)} cy={toFixed(center.y)} r="1" fill="black" opacity={0.7} />
+            <circle cx={toFixed(center.x)} cy={toFixed(center.y)} r="1" fill={darkMode ? 'white' : 'black'} opacity={0.7} />
             {showNextPredictedPoint && (
               <circle cx={toFixed(nextPoint2.x)} cy={toFixed(nextPoint2.y)} r="4" fill="orange" />
             )}
@@ -262,35 +283,36 @@ const ChordWalker = () => {
               <circle cx={toFixed((point1.x + point2.x) / 2)} cy={toFixed((point1.y + point2.y) / 2)} stroke='black' r="2" fill="pink" />
             )}
           </svg>
-          <button
-            className="bg-blue-500 text-white px-4 py-2 rounded ml-4 absolute bottom-3 left-3"
+          <Button
+            variant={darkMode ? 'destructive' : 'default'}
+            className="absolute bottom-3 left-3"
             onClick={() => setPlay(!play)}
           >
             {play ? 'Pause' : 'Play'}
-          </button>
+          </Button>
         </div>
 
         <div className="flex space-x-3">
           <div className='flex flex-col justify-evenly h-full'>
             <div>
-              <input className='m-2 align-middle' type='checkbox' id='isEllipse' checked={showEllipse} onChange={() => setShowEllipse(!showEllipse)} />
+              <Checkbox className='align-middle mr-2' id='isEllipse' checked={showEllipse} onCheckedChange={() => setShowEllipse(!showEllipse)} />
               <label className='align-middle select-none' htmlFor='isEllipse'>Use Ellipse</label>
             </div>
             <div>
-              <input className='m-2 align-middle' type='checkbox' id='showNeighbors' checked={showActiveNeighbors} onChange={() => setShowActiveNeighbors(!showActiveNeighbors)} />
+              <Checkbox className='align-middle mr-2' id='showNeighbors' checked={showActiveNeighbors} onCheckedChange={() => setShowActiveNeighbors(!showActiveNeighbors)} />
               <label className='align-middle select-none' htmlFor='showNeighbors'>Show Active Neighbors (grey)</label>
             </div>
             <div>
-              <input className='m-2 align-middle' type='checkbox' id='showNextPred' checked={showNextPredictedPoint} onChange={() => setShowNextPredictedPoint(!showNextPredictedPoint)} />
+              <Checkbox className='align-middle mr-2' id='showNextPred' checked={showNextPredictedPoint} onCheckedChange={() => setShowNextPredictedPoint(!showNextPredictedPoint)} />
               <label className='align-middle select-none' htmlFor='showNextPred'>Show Next Predicted Point (orange)</label>
             </div>
             <div>
-              <input className='m-2 align-middle' type='checkbox' id='showMidpoint' checked={showMidpoint} onChange={() => setShowMidpoint(!showMidpoint)} />
+              <Checkbox className='align-middle mr-2' id='showMidpoint' checked={showMidpoint} onCheckedChange={() => setShowMidpoint(!showMidpoint)} />
               <label className='align-middle select-none' htmlFor='showMidpoint'>Show Midpoint (pink)</label>
             </div>
             <div>
-              <input className='m-2 align-middle' type='checkbox' id='showTracedMidpointPath' checked={showTracedMidpointPath} onChange={() => setShowTracedMidpointPath(!showTracedMidpointPath)} />
-              <label className='align-middle select-none' htmlFor='showTracedMidpointPath'>Show Traced Mindpoint path (orange)</label>
+              <Checkbox className='align-middle mr-2' id='showTracedMidpointPath' checked={showTracedMidpointPath} onCheckedChange={() => setShowTracedMidpointPath(!showTracedMidpointPath)} />
+              <label className='align-middle select-none' htmlFor='showTracedMidpointPath'>Show Traced Midpoint path (orange)</label>
             </div>
           </div>
           <div className="space-y-4 flex-1">
@@ -342,6 +364,7 @@ const ChordWalker = () => {
             <div>
               <label className="block text-sm font-medium mb-2">Chord Length: {chordLength}%</label>
               <Slider
+
                 value={[chordLength]}
                 min={10}
                 max={100}
